@@ -6,7 +6,7 @@
  *
  * @author    Nicola Lambathakis http://www.tattoocms.it/
  * @category    plugin
- * @version     1.3.2
+ * @version     1.3.3
  * @license	 http://www.gnu.org/copyleft/gpl.html GNU Public License (GPL)
  * @internal    @events OnManagerLogin,OnBeforeManagerLogout
  * @internal @properties &backupPath=Backup Path;string;assets/backup/ &keepBackups=Number of snapshots to keep;string;10 &backup_at=Run Backup at:;menu;Login,Logout,Both;Logout &allow_backup=Run Backup for:;menu;All,ThisRolesOnly,ThisUsersOnly;All &this_roles=Role IDs (comma separated):;string;1 &this_users=User IDs (comma separated):;string;1 &debugMode=Debug Mode;menu;false,true;false
@@ -69,6 +69,8 @@ function getEvolutionVersion() {
             if (!empty($database_server) && !empty($database_user) && !empty($dbase)) {
                 $conn = new mysqli($database_server, $database_user, $database_password, trim($dbase, '`'));
                 if (!$conn->connect_error) {
+                    $conn->set_charset('utf8mb4');
+                    
                     // Try different queries to find version
                     $versionQueries = [
                         "SELECT setting_value FROM {$table_prefix}system_settings WHERE setting_name = 'settings_version'",
@@ -198,6 +200,9 @@ if (!$current_user && isset($_SESSION['mgrInternalKey']) && $_SESSION['mgrIntern
     try {
         $conn = new mysqli($database_server, $database_user, $database_password, trim($dbase, '`'));
         if (!$conn->connect_error) {
+            $conn->set_charset('utf8mb4');
+            autoBackupLog("Database connection established with utf8mb4 charset for user info", $debugMode);
+            
             // First check if table exists
             $table_check = $conn->query("SHOW TABLES LIKE '{$table_prefix}manager_users'");
             if ($table_check && $table_check->num_rows > 0) {
@@ -328,12 +333,14 @@ try {
             if (!$mysqli->select_db($database)) {
                 autoBackupLog("Database selection error: {$mysqli->error}", $debugMode);
             } else {
-                autoBackupLog("Alternative MySQL connection established", $debugMode);
+                $mysqli->set_charset('utf8mb4');
+                autoBackupLog("Alternative MySQL connection established with utf8mb4 charset", $debugMode);
                 goto process_backup;
             }
         }
     } else {
-        autoBackupLog("MySQL connection established", $debugMode);
+        $mysqli->set_charset('utf8mb4');
+        autoBackupLog("MySQL connection established with utf8mb4 charset", $debugMode);
         
         process_backup:
         
@@ -385,8 +392,13 @@ try {
             $output .= "# Description: Auto-snapshot triggered by {$username} via {$evtName}\n";
             $output .= "#\n\n";
             
-            // Compatible MySQL settings
-            $output .= "SET SQL_MODE=\"NO_AUTO_VALUE_ON_ZERO\";\n";
+            // Compatible MySQL settings with better charset support
+            $output .= "/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n";
+            $output .= "/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;\n";
+            $output .= "/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;\n";
+            $output .= "/*!40101 SET NAMES utf8mb4 */;\n";
+            $output .= "/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;\n";
+            $output .= "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;\n";
             $output .= "SET time_zone = \"+00:00\";\n\n";
             
             // Write header to file
@@ -451,10 +463,19 @@ try {
                 }
             }
             
+            // Footer with charset restoration
+            $output = "/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;\n";
+            $output .= "/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;\n";
+            $output .= "/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;\n";
+            $output .= "/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;\n";
+            $output .= "/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;\n";
+            
+            file_put_contents($path, $output, FILE_APPEND);
+            
             // Verify result
             if (file_exists($path)) {
                 $filesize = filesize($path);
-                autoBackupLog("Backup completed: {$filesize} bytes written, {$totalRows} total rows", $debugMode);
+                autoBackupLog("Backup with utf8mb4 charset completed: {$filesize} bytes written, {$totalRows} total rows", $debugMode);
                 $backupSuccess = ($filesize > 500 && $totalRows > 0); // More flexible check
             } else {
                 autoBackupLog("ERROR: Backup file not created", $debugMode);
