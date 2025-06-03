@@ -375,7 +375,7 @@ try {
             
             $output = "#\n";
             $output .= "# " . addslashes($siteName) . " Database Dump\n";
-            $output .= "# Evolution CMS Version: {$evolutionVersion}\n";
+            $output .= "# MODX Version: {$evolutionVersion}\n";
             $output .= "# \n";
             $output .= "# Host: " . $host . "\n";
             $output .= "# Generation Time: " . date("d-m-Y H:i:s") . "\n";
