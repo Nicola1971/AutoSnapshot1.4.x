@@ -6,7 +6,7 @@
  *
  * @author    Nicola Lambathakis http://www.tattoocms.it/
  * @category    plugin
- * @version     1.3.3
+ * @version     1.3.4
  * @license	 http://www.gnu.org/copyleft/gpl.html GNU Public License (GPL)
  * @internal    @events OnManagerLogin,OnBeforeManagerLogout
  * @internal @properties &backupPath=Backup Path;string;assets/backup/ &keepBackups=Number of snapshots to keep;string;10 &backup_at=Run Backup at:;menu;Login,Logout,Both;Logout &allow_backup=Run Backup for:;menu;All,ThisRolesOnly,ThisUsersOnly;All &this_roles=Role IDs (comma separated):;string;1 &this_users=User IDs (comma separated):;string;1 &debugMode=Debug Mode;menu;false,true;false
@@ -401,8 +401,16 @@ try {
             $output .= "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;\n";
             $output .= "SET time_zone = \"+00:00\";\n\n";
             
+            // Open the snapshot file once and keep the handle for all writes
+            $fh = fopen($path, 'wb');
+            if (!$fh) {
+                autoBackupLog("ERROR: Unable to open snapshot file for writing: {$path}", $debugMode);
+                $mysqli->close();
+                throw new Exception("Unable to open snapshot file");
+            }
+
             // Write header to file
-            $headerWritten = file_put_contents($path, $output);
+            $headerWritten = fwrite($fh, $output);
             autoBackupLog("Header written: {$headerWritten} bytes", $debugMode);
             
             // Loop through all tables
@@ -423,7 +431,7 @@ try {
                 $output .= $row[1] . ";\n\n";
                 
                 // Write structure to file
-                file_put_contents($path, $output, FILE_APPEND);
+                fwrite($fh, $output);
                 $output = "";
                 
                 // Get table data
@@ -456,10 +464,10 @@ try {
                         $output .= ");\n";
                         
                         // Write each row to file
-                        file_put_contents($path, $output, FILE_APPEND);
+                        fwrite($fh, $output);
                     }
                     
-                    file_put_contents($path, "\n", FILE_APPEND);
+                    fwrite($fh, "\n");
                 }
             }
             
@@ -470,7 +478,9 @@ try {
             $output .= "/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;\n";
             $output .= "/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;\n";
             
-            file_put_contents($path, $output, FILE_APPEND);
+            fwrite($fh, $output);
+            fclose($fh);
+            clearstatcache(true, $path);
             
             // Verify result
             if (file_exists($path)) {
