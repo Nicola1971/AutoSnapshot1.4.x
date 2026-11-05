@@ -6,7 +6,7 @@
  *
  * @author    Nicola Lambathakis http://www.tattoocms.it/
  * @category    plugin
- * @version     1.3.4
+ * @version     1.3.5
  * @license	 http://www.gnu.org/copyleft/gpl.html GNU Public License (GPL)
  * @internal    @events OnManagerLogin,OnBeforeManagerLogout
  * @internal @properties &backupPath=Backup Path;string;assets/backup/ &keepBackups=Number of snapshots to keep;string;10 &backup_at=Run Backup at:;menu;Login,Logout,Both;Logout &allow_backup=Run Backup for:;menu;All,ThisRolesOnly,ThisUsersOnly;All &this_roles=Role IDs (comma separated):;string;1 &this_users=User IDs (comma separated):;string;1 &debugMode=Debug Mode;menu;false,true;false
@@ -530,6 +530,18 @@ if ($backupSuccess) {
 } else {
     // Log to file when debug is active
     autoBackupLog("ERROR: AutoSnapshot failed: unable to create database backup - Evolution CMS {$evolutionVersion}", $debugMode);
+
+    // Remove incomplete snapshot file so it doesn't count toward keepBackups
+    if (isset($fh) && is_resource($fh)) {
+        fclose($fh);
+    }
+    if (file_exists($path)) {
+        if (@unlink($path)) {
+            autoBackupLog("Incomplete snapshot file removed: {$filename}", $debugMode);
+        } else {
+            autoBackupLog("ERROR: unable to remove incomplete snapshot file: {$filename}", $debugMode);
+        }
+    }
 }
 
 autoBackupLog("--- END AUTOSNAPSHOT 1.4.x ---", $debugMode);
